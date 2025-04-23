@@ -1,20 +1,20 @@
 # Core dependencies
-streamlit
-python-dotenv
-openai
+streamlit==1.44.1
+python-dotenv==1.1.0
+openai==1.75.0
 
 
-langchain
-langchain-community
-langchain-openai
-faiss-cpu
+langchain==0.3.24
+langchain-community==0.3.22
+langchain-openai==0.3.14
+faiss-cpu==1.10.0
 
 # Document loaders
-unstructured
-pypdf
-python-docx
-python-pptx
+unstructured==0.17.2
+pypdf==5.4.0
+python-docx==1.1.2
+python-pptx==1.0.2
 
 # Type hints and utilities
-typing-extensions
-pydantic
+typing_extensions==4.13.2
+pydantic==2.11.3

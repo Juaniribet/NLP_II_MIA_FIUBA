@@ -4,3 +4,5 @@
 temp_vector_store/
 uploads/
 **/__pycache__/
+.env
+__pycache__/

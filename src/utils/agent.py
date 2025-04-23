@@ -1,14 +1,16 @@
 import openai
-from typing import List, Dict, Optional
-from src.utils.config import OPENAI_API_KEY
+import os
 import logging
+import json
+from typing import List, Dict, Optional
+
 from pydantic import BaseModel
 from typing import Literal, Optional
-import json
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
-import os
+
 from src.utils.prompts import AGENT_PROMPT
+from src.utils.config import OPENAI_API_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -32,18 +34,34 @@ class AgentAI:
         self.temp_dir = "temp_vector_store"
 
     def _build_prompt(self) -> str:
-        """Build the system prompt for the agent."""
+        """
+        Build the system prompt for the agent.
+        Loads vector store metadata from a JSON file.
+        If the file or its directory does not exist, it creates them
+        and initializes the file with an empty JSON object {}.
+        """
+        vector_stores_metadata_path = "temp_vector_store/vector_store_metadata.json"
+        directory_path = os.path.dirname(vector_stores_metadata_path)
+
+        os.makedirs(directory_path, exist_ok=True)
+
         try:
-            vector_stores_metadata_path = "temp_vector_store/vector_store_metadata.json"
             with open(vector_stores_metadata_path, "r") as f:
                 vector_stores = json.load(f)
-
-            return AGENT_PROMPT.format(vector_stores=vector_stores)
-        
+        except FileNotFoundError:
+            # If the file doesn't exist, create it with an empty JSON object
+            print(f"Info: {vector_stores_metadata_path} not found. Creating with empty object.")
+            with open(vector_stores_metadata_path, "w") as f:
+                json.dump({}, f)
+            # Load the newly created empty file
+            with open(vector_stores_metadata_path, "r") as f:
+                vector_stores = json.load(f)
         except Exception as e:
             logger.error(f"Error building prompt: {e}")
             raise
 
+        return AGENT_PROMPT.format(vector_stores=vector_stores)
+        
     def get_response(self, messages: List[Dict]) -> str:
         """
         Get a response from OpenAI API with retry mechanism.
