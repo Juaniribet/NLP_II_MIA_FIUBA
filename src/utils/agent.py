@@ -22,7 +22,6 @@ class AgentOutput(BaseModel):
 class AgentAI:
     def __init__(self):
         openai.api_key = OPENAI_API_KEY
-        self.model = "gpt-4o-2024-08-06"
         self.max_retries = 3
         self.retry_delay = 1
         self.prompt = self._build_prompt()
@@ -33,6 +32,8 @@ class AgentAI:
         self.client = openai.OpenAI()
         self.embeddings = OpenAIEmbeddings()
         self.temp_dir = "temp_vector_store"
+        self.token_count = {"user_interaction": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                            "agent_interaction": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}}
 
     def _build_prompt(self) -> str:
         """
@@ -63,7 +64,7 @@ class AgentAI:
 
         return AGENT_PROMPT.format(vector_stores=vector_stores)
         
-    def get_response(self, messages: List[Dict]) -> str:
+    def get_response(self, messages: List[Dict], model) -> str:
         """
         Get a response from OpenAI API with retry mechanism.
         
@@ -77,13 +78,15 @@ class AgentAI:
         """
         # for attempt in range(self.max_retries):
         try:
+            # print(model)
             response = self.client.beta.chat.completions.parse(
-                model=self.model,
+                model=model,
                 messages=messages,
                 response_format=AgentOutput,
             )
+
             
-            return response.choices[0].message.parsed
+            return response
         except Exception as e:
             logger.error(f"Failed to get response from OpenAI: {e}")
             raise
@@ -123,7 +126,7 @@ class AgentAI:
             logger.error(f"Error getting context from vector store: {e}")
             return ""
 
-    def contextualize_question(self, chat_history: List[Dict], model: str) -> str:
+    def contextualize_question(self, chat_history: List[Dict]) -> str:
         """
         Reformulate the user's question to be standalone.
         
@@ -144,10 +147,8 @@ class AgentAI:
             }]
 
             response = openai.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=0.3,
-                    max_tokens=500
+                    model="gpt-4o-mini-2024-07-18",
+                    messages=messages
                 )
 
             return response.choices[0].message.content
@@ -155,25 +156,47 @@ class AgentAI:
             logger.error(f"Error contextualizing question: {e}")
             return chat_history[-1]["content"]
 
-    def run(self, chat_history, max_turns: int = 15) -> Optional[str]:
+    def run(self, chat_history, model, max_turns: int = 15) -> Optional[str]:
         """
         Run the agent with the given question.
         """
         try:
-            question = self.contextualize_question(chat_history, self.model)
+            question = self.contextualize_question(chat_history)
                         
             self.agent_messages.extend(chat_history[1:])
             
             for turn in range(max_turns):
                 # Get agent's response
-                result = self.get_response(self.agent_messages)
+                response = self.get_response(self.agent_messages, model)
+
+                result = response.choices[0].message.parsed
                 
                 if not result:
                     logger.error("Invalid agent output format")
                     return None
 
                 logger.info(f"Turn {turn+1}: {result.type.upper()} - {result.content}")
+
+                if turn == 0:
+                    self.token_count["user_interaction"]["prompt_tokens"] = response.usage.prompt_tokens
+
+                if (turn == 0) and (result.type == "answer"):
+                    self.token_count["user_interaction"]["completion_tokens"] = response.usage.completion_tokens
+
+                if (turn == 0) and (result.type != "answer"):
+                    self.token_count["agent_interaction"]["completion_tokens"] = response.usage.completion_tokens
+
+                if (turn > 0) and (result.type != "answer"):
+                    self.token_count["agent_interaction"]["prompt_tokens"] += response.usage.prompt_tokens
+                    self.token_count["agent_interaction"]["completion_tokens"] += response.usage.completion_tokens
+
+                if (turn > 0) and (result.type == "answer"):
+                    self.token_count["agent_interaction"]["prompt_tokens"] += response.usage.prompt_tokens
+                    self.token_count["user_interaction"]["completion_tokens"] += response.usage.completion_tokens
                 
+                self.token_count["user_interaction"]["total_tokens"] = self.token_count["user_interaction"]["prompt_tokens"] + self.token_count["user_interaction"]["completion_tokens"]
+                self.token_count["agent_interaction"]["total_tokens"] = self.token_count["agent_interaction"]["prompt_tokens"] + self.token_count["user_interaction"]["completion_tokens"]
+
                 # Add the agent's response to message history
                 agent_message = {"role": "assistant", "content": json.dumps({
                     "type": result.type,
@@ -182,6 +205,7 @@ class AgentAI:
                 self.agent_messages.append(agent_message)
                 
                 if result.type == "answer":
+                    
                     return result.content
                     
                 elif result.type == "action":

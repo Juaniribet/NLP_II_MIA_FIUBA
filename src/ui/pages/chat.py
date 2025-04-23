@@ -28,6 +28,8 @@ class ChatPage:
             }]
         if "agent_messages" not in st.session_state:
             st.session_state["agent_messages"] = []
+        if "token_count" not in st.session_state:
+            st.session_state["token_count"] = []
 
 
     def _generate_response(self, prompt: str) -> Generator[str, None, str]:
@@ -41,11 +43,16 @@ class ChatPage:
             
             with st.spinner("Agent is thinking..."):
                 # Get response using the agent
-                response = self.agent.run(prompt)
+                response = self.agent.run(prompt, st.session_state.model)
                 if not st.session_state["agent_messages"]:
                     st.session_state["agent_messages"] = [self.agent.agent_messages]
                 else:
                     st.session_state["agent_messages"].extend([self.agent.agent_messages])
+                if not st.session_state["token_count"]:
+                    st.session_state["token_count"] = [self.agent.token_count]
+                else:
+                    st.session_state["token_count"].extend([self.agent.token_count])
+
             
             if response is None:
                 yield "I apologize, but I encountered an error while generating a response. Please try again."
@@ -77,8 +84,11 @@ class ChatPage:
                 "role": "assistant",
                 "content": f"Hello {st.session_state.user['user_id'].capitalize()}! I'm your AI assistant"}]
             st.session_state["agent_messages"] = []
+            st.session_state["token_count"] = []
             st.rerun()
-            
+
+        # diplay selec model in the sidebar
+        self.chat_interface.display_model_controls(self.available_models)    
 
         # Display chat messages using the ChatInterface
         self.chat_interface.display_messages(st.session_state.messages)
@@ -88,13 +98,12 @@ class ChatPage:
             # Add user message to chat history
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
-                st.markdown(prompt)
+                st.write(prompt)
             
             # Generate and stream response
             with st.chat_message("assistant"):
                 
-                message_placeholder = st.empty()
-                full_response = ""
+                # full_response = ""
                 
                 # Stream the response
                 full_response = st.write_stream(self._generate_response(st.session_state.messages))
@@ -104,8 +113,25 @@ class ChatPage:
             
             # Add assistant response to chat history
             st.session_state.messages.append({"role": "assistant", "content": full_response}) 
+        
+        if st.session_state.token_count:
+            st.sidebar.write("Token count:")
+            total_user_prompt_tokens = sum(item["user_interaction"]["prompt_tokens"]for item in st.session_state["token_count"])
+            total_user_completion_tokens = sum(item["user_interaction"]["completion_tokens"]for item in st.session_state["token_count"])
+            total_user_total_tokens = sum(item["user_interaction"]["total_tokens"]for item in st.session_state["token_count"])
+            total_agent_prompt_tokens = sum(item["agent_interaction"]["prompt_tokens"]for item in st.session_state["token_count"])
+            total_agent_completion_tokens = sum(item["agent_interaction"]["completion_tokens"]for item in st.session_state["token_count"])
+            total_agent_total_tokens = sum(item["agent_interaction"]["total_tokens"]for item in st.session_state["token_count"])
 
-        if "agent_messages" in st.session_state:
+            st.sidebar.write(f"user prompt tokens: {total_user_prompt_tokens}")
+            st.sidebar.write(f"user completion tokens: {total_user_completion_tokens}")
+            st.sidebar.write(f"user total tokens: {total_user_total_tokens}")
+            st.sidebar.write(f"Thinking prompt tokens: {total_agent_prompt_tokens}")
+            st.sidebar.write(f"Thinking completion tokens: {total_agent_completion_tokens}")
+            st.sidebar.write(f"Thinking total tokens: {total_agent_total_tokens}")
+                
+
+        if st.session_state.agent_messages:
             options=[i+1 for i in range(len(st.session_state.agent_messages))]
             index=len(options)-1
             question_selected =st.sidebar.selectbox(

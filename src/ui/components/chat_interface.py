@@ -106,14 +106,14 @@ class ChatInterface:
             key="model"
         )
         
-        st.sidebar.slider(
-            "Temperature",
-            min_value=0.0,
-            max_value=1.0,
-            value=st.session_state.temperature,
-            step=0.1,
-            key="temperature"
-        )
+        # st.sidebar.slider(
+        #     "Temperature",
+        #     min_value=0.0,
+        #     max_value=1.0,
+        #     value=st.session_state.temperature,
+        #     step=0.1,
+        #     key="temperature"
+        # )
 
     def display_error(self, error_message: str):
         """Display error messages to the user."""
