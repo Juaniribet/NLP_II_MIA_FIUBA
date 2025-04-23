@@ -6,8 +6,8 @@ Una aplicación basada en Streamlit para interactuar con modelos de IA, desarrol
 
 ## Características
 
-- Sistema de login basado en nombre de usuario
-- Interfaz de chat limpia y moderna
+- Sistema de login mockup para identificaion de usuario (posible uso de registro de chats)
+- Interfaz de chat y carga de documentos
 - Historial de mensajes durante la sesión
 - Simulación de streaming de respuestas
 - Gestión de documentos y creación de vector stores
@@ -15,22 +15,7 @@ Una aplicación basada en Streamlit para interactuar con modelos de IA, desarrol
 
 ## Diagrama de Flujo
 
-```mermaid
-graph TD
-    A[Inicio] --> B[Login]
-    B --> C{Usuario Autenticado?}
-    C -->|No| B
-    C -->|Sí| D[Página Principal]
-    D --> E[Selección de Página]
-    E --> F[Subir Documentos]
-    E --> G[Chat]
-    F --> H[Crear Vector Store]
-    H --> I[Procesar Documentos]
-    I --> J[Guardar Vector Store]
-    G --> K[Consultar Vector Store]
-    K --> L[Generar Respuesta]
-    L --> M[Mostrar Respuesta]
-```
+![Diagrama de Flujo](./images/Diagrama_TP_NLPII.drawio.png)
 
 ## Configuración
 
@@ -97,4 +82,4 @@ streamlit run main.py
 - Python 3.8+
 - Streamlit
 - Cliente Python de OpenAI
-- python-dotenv 
+- python-dotenv

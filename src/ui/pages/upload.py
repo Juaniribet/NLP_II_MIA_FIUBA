@@ -121,7 +121,8 @@ class UploadPage:
                     # Save vector store metadata
                     if not self.vector_store_metadata.add_vector_store(
                         st.session_state.vector_store_params["store_name"],
-                        st.session_state.vector_store_params["store_description"]
+                        st.session_state.vector_store_params["store_description"],
+                        st.session_state.vector_store_params["embedding_model"]
                     ):
                         st.error("Failed to save vector store metadata.")
                         return False

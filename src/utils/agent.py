@@ -102,10 +102,15 @@ class AgentAI:
         try:
             # Load the vector store by name
             load_path = os.path.join(self.temp_dir, vector_store_name)
-            vectorstore = FAISS.load_local(load_path, embeddings=self.embeddings, allow_dangerous_deserialization=True)
-            retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 3})
+            with open("./temp_vector_store/vector_store_metadata.json", "r") as f:
+                metadata = json.load(f)
+                embeddings_model = metadata.get(vector_store_name)["embedding_model"]
+            print(f"Loading vector store from {load_path} with embedding model {embeddings_model}")
+            embeddings = OpenAIEmbeddings(model=embeddings_model)
+            vectorstore = FAISS.load_local(load_path, embeddings=embeddings, allow_dangerous_deserialization=True)
+            retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 8})
 
-            docs = retriever.get_relevant_documents(query)
+            docs = retriever.invoke(query)
             
             context_parts = []
             for i, doc in enumerate(docs, 1):

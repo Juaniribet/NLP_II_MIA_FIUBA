@@ -19,7 +19,7 @@ class VectorStoreMetadata:
             with open(self.metadata_file, 'w') as f:
                 json.dump({}, f)
 
-    def add_vector_store(self, name: str, description: str) -> bool:
+    def add_vector_store(self, name: str, description: str, embedding_model: str) -> bool:
         """
         Add a new vector store to the metadata file.
         
@@ -36,7 +36,7 @@ class VectorStoreMetadata:
                 metadata = json.load(f)
             
             # Add new vector store
-            metadata[name] = description
+            metadata[name] = {"description" : description, "embedding_model" : embedding_model}
             
             # Write updated metadata
             with open(self.metadata_file, 'w') as f:

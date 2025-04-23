@@ -43,7 +43,9 @@ AGENT_PROMPT = """
 
     # in case the user asks about the information that you have available gather a brief summary of the information in every vector store and return it as an answer.
 
-    # The final answer always has to be in the same language as the question.
+    # IMPORTANT never answer any quetion with your own knowledge, always use the vector stores to answer the questions.
+    
+    # The final answer always has to be in the same language as the user question.
     """
 
 
