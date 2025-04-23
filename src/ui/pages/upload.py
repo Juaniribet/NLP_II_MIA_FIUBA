@@ -3,6 +3,7 @@ import os
 from typing import Optional, List, Dict
 from src.auth.auth_handler import is_authenticated
 from src.utils.vector_store_creator import VectorStoreCreator
+from src.utils.vector_store_metadata import VectorStoreMetadata
 
 class UploadPage:
     def __init__(self):
@@ -10,6 +11,7 @@ class UploadPage:
         self.upload_path = "uploads"
         self._ensure_upload_directory()
         self.vector_store_creator = VectorStoreCreator()
+        self.vector_store_metadata = VectorStoreMetadata()
         self.available_embedding_models = [
             "text-embedding-3-small",
             "text-embedding-3-large",
@@ -76,16 +78,34 @@ class UploadPage:
                 help="Number of characters that overlap between consecutive chunks. Helps maintain context between chunks."
             )
         
-        # Vector store name
+        # Vector store name (required)
         st.session_state.vector_store_params["store_name"] = st.sidebar.text_input(
-            "Vector Store Name",
-            value=st.session_state.vector_store_params.get("store_name", "default"),
-            help="Name for the vector store. This will be used to save and load the store."
+            "Vector Store Name *",
+            value=st.session_state["vector_store_name"],
+            help="Name for the vector store. This will be used to save and load the store.",
+            placeholder=st.session_state["vector_store_name"]
         )
+
+        # Vector store description (required)
+        st.session_state.vector_store_params["store_description"] = st.sidebar.text_input(
+            "Vector Store Description *",
+            value=st.session_state["vector_store_description"],
+            help="Description for the vector store. This will be used to save and load the store.",
+            placeholder=st.session_state["vector_store_description"]
+        )
+
 
     def _create_vector_store(self, file_paths: List[str]) -> bool:
         """Create a vector store from the uploaded files."""
         try:
+            # Validate required fields
+            if not st.session_state.vector_store_params.get("store_name"):
+                st.error("Vector store name is required. Please enter a name for your vector store.")
+                return False
+            if not st.session_state.vector_store_params.get("store_description"):
+                st.error("Vector store description is required. Please enter a description for your vector store.")
+                return False
+
             with st.spinner("Creating vector store..."):
                 # Update vector store creator parameters
                 self.vector_store_creator.split_documents(
@@ -98,14 +118,17 @@ class UploadPage:
                     name=st.session_state.vector_store_params["store_name"]
                 )
                 if vector_store:
+                    # Save vector store metadata
+                    if not self.vector_store_metadata.add_vector_store(
+                        st.session_state.vector_store_params["store_name"],
+                        st.session_state.vector_store_params["store_description"]
+                    ):
+                        st.error("Failed to save vector store metadata.")
+                        return False
+
                     st.session_state.vector_store = vector_store
                     st.session_state["vector_store"] = vector_store  # Ensure both formats are set
                     st.session_state.vector_store_name = st.session_state.vector_store_params["store_name"]
-                    # Update chat messages with new vector store name
-                    st.session_state.messages = [{
-                        "role": "assistant",
-                        "content": f"Hello {st.session_state.user['user_id'].capitalize()}! I'm your AI assistant to answer questions about the documents in the Knowledgebase: {st.session_state.vector_store_name}"
-                    }]
                     st.success("Vector store created successfully!")
                     return True
                 else:
@@ -145,6 +168,7 @@ class UploadPage:
             print(f"Error getting documents from vector store: {e}")
             return []
 
+
     def _display_vector_store_management(self):
         """Display vector store management options."""
         st.sidebar.title("Vector Store Management")
@@ -155,28 +179,34 @@ class UploadPage:
             if "vector_store" in st.session_state:
                 del st.session_state.vector_store
             st.session_state.uploaded_files = []
-            st.session_state.vector_store_params["store_name"] = "default"
+            st.session_state.vector_store_params["store_name"] = ""
+            st.session_state.vector_store_params["store_description"] = ""
             st.success("Ready to create a new vector store!")
             st.rerun()
         
-        # List available vector stores
-        available_stores = self.vector_store_creator.list_vector_stores()
+        # List available vector stores with descriptions
+        available_stores = self.vector_store_metadata.list_vector_stores()
         if available_stores:
             st.sidebar.write("Available Vector Stores:")
-            for store in available_stores:
-                col1, col2 = st.sidebar.columns([3, 1])
-                with col1:
-                    st.write(store)
-                with col2:
-                    if st.button("Delete", key=f"delete_{store}"):
-                        self.vector_store_creator.delete_vector_store(store)
-                        st.rerun()
+            for store_name, description in available_stores.items():
+                with st.sidebar.expander(f"📄 {store_name}"):
+                    st.write(f"Description: {description}")
+                    if st.button("Delete", key=f"delete_{store_name}"):
+                        # Delete both the vector store and its metadata
+                        if self.vector_store_creator.delete_vector_store(store_name):
+                            self.vector_store_metadata.delete_vector_store(store_name)
+                            # If the deleted store was the current one, clear it from session state
+                            if st.session_state.get("vector_store_name") == store_name:
+                                if "vector_store" in st.session_state:
+                                    del st.session_state.vector_store
+                                st.session_state.vector_store_name = ""
+                            st.rerun()
         
         # Load vector store
         if available_stores:
             selected_store = st.sidebar.selectbox(
                 "Load Vector Store",
-                options=available_stores,
+                options=list(available_stores.keys()),
                 index=0
             )
             if st.sidebar.button("Load Selected Store"):
@@ -184,12 +214,9 @@ class UploadPage:
                 if vector_store:
                     st.session_state.vector_store = vector_store
                     st.session_state["vector_store"] = vector_store
+                    st.session_state["vector_store_description"] = self.vector_store_metadata.get_vector_store_description(selected_store)
                     st.session_state.vector_store_name = selected_store
                     # Update chat messages with new vector store name
-                    st.session_state.messages = [{
-                        "role": "assistant",
-                        "content": f"Hello {st.session_state.user['user_id'].capitalize()}! I'm your AI assistant to answer questions about the documents in the Knowledgebase: {st.session_state.vector_store_name}"
-                    }]
                     st.success(f"Loaded vector store: {selected_store}")
                     st.rerun()  # Force a rerun to update the document display
                 else:
@@ -203,22 +230,21 @@ class UploadPage:
             st.warning("Please log in to upload files.")
             return
 
-        # Display vector store parameters in sidebar
-        self._display_vector_store_params()
-        
-        # Display vector store management options
-        self._display_vector_store_management()
-
         # Display documents from current vector store
         if "vector_store" in st.session_state and st.session_state.vector_store is not None:
+            st.session_state["vector_store_description"] = self.vector_store_metadata.get_vector_store_description(st.session_state.vector_store_name)
             st.subheader("Documents in Current Vector Store")
             documents = self._get_documents_from_vector_store()
             if documents:
                 for doc in documents:
                     with st.expander(f"📄 {doc['source']}"):
                         st.write(f"Pages: {', '.join(map(str, doc['pages']))}")
+            
             else:
                 st.info("No documents found in the current vector store.")
+        else:
+            st.session_state["vector_store_name"] = ""
+            st.session_state["vector_store_description"] = ""
 
         # Display current uploaded files
         if st.session_state.uploaded_files:
@@ -238,6 +264,9 @@ class UploadPage:
                         st.rerun()
 
         st.write("Upload your documents here. Supported formats: " + ", ".join(self.allowed_extensions))
+
+        # Display vector store parameters in sidebar
+        self._display_vector_store_params()
         
         uploaded_files = st.file_uploader(
             "Choose files",
@@ -254,7 +283,7 @@ class UploadPage:
                     "type": file.type
                 })
 
-            if st.button("Upload Files"):
+            if st.sidebar.button("Create Vector Store"):
                 valid_files = [file for file in uploaded_files if self._is_valid_file(file)]
                 if valid_files:
                     with st.spinner("Uploading files..."):
@@ -275,3 +304,8 @@ class UploadPage:
                                 st.error("Files uploaded but vector store creation failed.")
                 else:
                     st.error("No valid files selected. Please upload supported file formats.") 
+        
+        
+        
+        # Display vector store management options
+        self._display_vector_store_management()

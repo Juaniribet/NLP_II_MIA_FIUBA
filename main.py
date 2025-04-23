@@ -5,7 +5,6 @@ from src.ui.pages.upload import UploadPage
 from src.utils.config import UI_CONFIG
 from src.ui.components.chat_interface import ChatInterface
 
-# Must be the first Streamlit command
 st.set_page_config(
     page_title=UI_CONFIG["page_title"],
     initial_sidebar_state=UI_CONFIG["initial_sidebar_state"]
@@ -53,8 +52,7 @@ def main():
         if page == "Upload":
             upload_page.render()
         else:
-            chat_page.render()
+            chat_page.render()         
             
-
 if __name__ == "__main__":
     main() 

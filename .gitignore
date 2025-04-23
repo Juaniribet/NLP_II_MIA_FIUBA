@@ -1,0 +1,6 @@
+.venv/
+.venv
+.env
+temp_vector_store/
+uploads/
+**/__pycache__/

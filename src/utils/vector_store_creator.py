@@ -1,7 +1,6 @@
 import os
-import argparse
 from dotenv import load_dotenv
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -12,32 +11,39 @@ from langchain_community.document_loaders import (
     UnstructuredPowerPointLoader,
 )
 from langchain.docstore.document import Document
+from src.utils.config import OPENAI_API_KEY
+import openai
+from langchain_openai import OpenAIEmbeddings
+import streamlit as st
 
 load_dotenv()
+openai.api_key = OPENAI_API_KEY
 
 class VectorStoreCreator:
     """
     A class to create and manage persistent FAISS vector stores.
     """
     def __init__(self):
+        openai.api_key = OPENAI_API_KEY
         self.documents: Optional[List[Document]] = None
         self.split_docs: Optional[List[Document]] = None
         self.db: Optional[FAISS] = None
         self.temp_dir = "temp_vector_store"
         self._ensure_temp_directory()
+        self.embeddings = OpenAIEmbeddings(model=st.session_state.vector_store_params["embedding_model"])
 
     def _ensure_temp_directory(self):
         """Ensure the temporary directory exists."""
         if not os.path.exists(self.temp_dir):
             os.makedirs(self.temp_dir)
 
-    def save_vector_store(self, name: str = "default"):
+    def save_vector_store(self, name: str = "default", vectorstore: FAISS = None):
         """Save the current vector store to disk."""
         if self.db is None:
             raise ValueError("No vector store to save")
         
         save_path = os.path.join(self.temp_dir, name)
-        self.db.save_local(save_path)
+        vectorstore.save_local(save_path)
         print(f"Vector store saved to {save_path}")
 
     def load_vector_store(self, name: str = "default") -> Optional[FAISS]:
@@ -51,7 +57,7 @@ class VectorStoreCreator:
                 model="text-embedding-3-small",
                 openai_api_key=os.getenv("OPENAI_API_KEY")
             )
-            self.db = FAISS.load_local(load_path, embeddings)
+            self.db = FAISS.load_local(load_path, embeddings, allow_dangerous_deserialization=True)
             return self.db
         except Exception as e:
             print(f"Error loading vector store: {e}")
@@ -151,13 +157,9 @@ class VectorStoreCreator:
 
         try:
             print(f"Creating embeddings using model: {embedding_model_name}")
-            embeddings = OpenAIEmbeddings(
-                model=embedding_model_name,
-                openai_api_key=os.getenv("OPENAI_API_KEY")
-            )
-            
-            self.db = FAISS.from_documents(self.split_docs, embeddings)
-            self.save_vector_store(name)
+
+            self.db = FAISS.from_documents(self.split_docs, self.embeddings)
+            self.save_vector_store(name, self.db)
             return self.db
 
         except Exception as e:
@@ -185,7 +187,7 @@ class VectorStoreCreator:
             print(f"Adding {len(documents)} documents to existing vector store")
             embeddings = OpenAIEmbeddings(
                 model=embedding_model_name,
-                openai_api_key=os.getenv("OPENAI_API_KEY")
+                openai_api_key=OPENAI_API_KEY
             )
             
             # Add documents to existing vector store
@@ -224,7 +226,7 @@ class VectorStoreCreator:
                 print(f"Adding documents to existing vector store: {name}")
                 # Add new documents to existing store
                 if self.add_documents_to_vector_store(self.split_docs):
-                    self.save_vector_store(name)
+                    self.save_vector_store(name, self.db)
                     return self.db
                 else:
                     print("Failed to add documents to existing vector store")

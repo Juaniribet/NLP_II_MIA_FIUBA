@@ -1,0 +1,208 @@
+import openai
+from typing import List, Dict, Optional
+from src.utils.config import OPENAI_API_KEY
+import logging
+from pydantic import BaseModel
+from typing import Literal, Optional
+import json
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+import os
+from src.utils.prompts import AGENT_PROMPT
+
+logger = logging.getLogger(__name__)
+
+class AgentOutput(BaseModel):
+    type: Literal["thought", "action", "answer"]
+    content: str
+
+class AgentAI:
+    def __init__(self):
+        openai.api_key = OPENAI_API_KEY
+        self.model = "gpt-4o-2024-08-06"
+        self.max_retries = 3
+        self.retry_delay = 1
+        self.prompt = self._build_prompt()
+        self.agent_messages = [{"role": "system", "content": self.prompt}]
+        self.known_actions = {
+            "get_context_from_vector_store": self.get_context_from_vector_store
+        }
+        self.client = openai.OpenAI()
+        self.embeddings = OpenAIEmbeddings()
+        self.temp_dir = "temp_vector_store"
+
+    def _build_prompt(self) -> str:
+        """Build the system prompt for the agent."""
+        try:
+            vector_stores_metadata_path = "temp_vector_store/vector_store_metadata.json"
+            with open(vector_stores_metadata_path, "r") as f:
+                vector_stores = json.load(f)
+
+            return AGENT_PROMPT.format(vector_stores=vector_stores)
+        
+        except Exception as e:
+            logger.error(f"Error building prompt: {e}")
+            raise
+
+    def get_response(self, messages: List[Dict]) -> str:
+        """
+        Get a response from OpenAI API with retry mechanism.
+        
+        Args:
+            chat_history: List of message dictionaries
+            temperature: Sampling temperature
+            stream: Whether to stream the response
+            
+        Returns:
+            str: The generated response
+        """
+        # for attempt in range(self.max_retries):
+        try:
+            response = self.client.beta.chat.completions.parse(
+                model=self.model,
+                messages=messages,
+                response_format=AgentOutput,
+            )
+            
+            return response.choices[0].message.parsed
+        except Exception as e:
+            logger.error(f"Failed to get response from OpenAI: {e}")
+            raise
+
+    def get_context_from_vector_store(self, vector_store_name: str, query) -> str:
+        """
+        Get relevant context from the vector store.
+        
+        Args:
+            vector_store_name: Name of the vector store to query
+            query: The search query
+            
+        Returns:
+            str: Retrieved context or empty string if error
+        """
+        try:
+            # Load the vector store by name
+            load_path = os.path.join(self.temp_dir, vector_store_name)
+            vectorstore = FAISS.load_local(load_path, embeddings=self.embeddings, allow_dangerous_deserialization=True)
+            retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 3})
+
+            docs = retriever.get_relevant_documents(query)
+            
+            context_parts = []
+            for i, doc in enumerate(docs, 1):
+                source = doc.metadata.get('source', f'Document {i}')
+                page = doc.metadata.get('page', 'N/A')
+                context_parts.append(f"[{i}] {doc.page_content}\nSource: {source} (Page {page})\n")
+            context = "\n".join(context_parts)
+            return context
+        except Exception as e:
+            logger.error(f"Error getting context from vector store: {e}")
+            return ""
+
+    def contextualize_question(self, chat_history: List[Dict], model: str) -> str:
+        """
+        Reformulate the user's question to be standalone.
+        
+        Args:
+            chat_history: List of message dictionaries
+            model: The model to use for reformulation
+            
+        Returns:
+            str: Reformulated question
+        """
+        try:
+            system_prompt = """Given a chat history and the latest user question which might 
+            reference context in the chat history, formulate a standalone question which can 
+            be understood without the chat history. Do NOT answer the question, just reformulate 
+            it if needed and otherwise return it as is."""
+
+            messages = [{
+                "role": "system",
+                "content": f"{system_prompt}\n\nChat history:\n{chat_history[:-1]}\n\nLatest question: {chat_history[-1]['content']}"
+            }]
+
+            response = openai.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=500
+                )
+
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Error contextualizing question: {e}")
+            return chat_history[-1]["content"]
+
+    def run(self, chat_history, max_turns: int = 15) -> Optional[str]:
+        """
+        Run the agent with the given question.
+        """
+        try:
+            question = self.contextualize_question(chat_history, self.model)
+            # Initialize message history with system prompt and user question
+            
+            self.agent_messages.extend(chat_history)
+            
+            for turn in range(max_turns):
+                # Get agent's response
+                result = self.get_response(self.agent_messages)
+                
+                if not result:
+                    logger.error("Invalid agent output format")
+                    return None
+
+                logger.info(f"Turn {turn+1}: {result.type.upper()} - {result.content}")
+                
+                # Add the agent's response to message history
+                agent_message = {"role": "assistant", "content": json.dumps({
+                    "type": result.type,
+                    "content": result.content
+                })}
+                self.agent_messages.append(agent_message)
+                
+                if result.type == "answer":
+                    return result.content
+                    
+                elif result.type == "action":
+                    # Parse action and parameter
+                    if ":" not in result.content:
+                        error_msg = f"Invalid action format: {result.content}"
+                        logger.error(error_msg)
+                        # Add error as user message and continue
+                        self.agent_messages.append({"role": "assistant", 
+                                                    "content": f"Error: {error_msg}. Please use the format 'get_context_from_vector_store: <vector_store_name>'"})
+                        continue
+                        
+                    action_name, action_param = result.content.split(":", 1)
+                    action_name = action_name.strip()
+                    action_param = action_param.strip()
+                    
+                    if action_name not in self.known_actions:
+                        error_msg = f"Unknown action: {action_name}"
+                        logger.error(error_msg)
+                        # Add error as user message and continue
+                        self.agent_messages.append({"role": "assistant", 
+                                                    "content": f"Error: {error_msg}. Available actions are: {list(self.known_actions.keys())}"})
+                        continue
+                    
+                    # Execute action and get observation
+                    observation = self.known_actions[action_name](action_param, question)
+                    # Add observation to message history
+                    self.agent_messages.append({"role": "assistant", 
+                                                "content": f"Observation: {observation}"})
+                    logger.info(f"Observation: {observation[:100]}...")
+                    
+                elif result.type == "thought":
+                    pass
+                
+                else:
+                    logger.error(f"Unknown result type: {result.type}")
+                    return None
+                    
+            logger.warning(f"Maximum number of turns ({max_turns}) reached without a final answer")
+            return "I wasn't able to find a definitive answer within the allowed reasoning steps."
+            
+        except Exception as e:
+            logger.error(f"Error running agent: {e}")
+            return f"An error occurred: {str(e)}"
+

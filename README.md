@@ -1,54 +1,100 @@
-# AI Chat Assistant
+# Asistente de Chat con IA
 
-A simple Streamlit-based chat interface for interacting with AI models.
+Una aplicación basada en Streamlit para interactuar con modelos de IA, desarrollada para el curso NLP II de la Maestría en Inteligencia Artificial de la FIUBA.
 
-## Features
+**Autor**: Juan Ignacio Ribet
 
-- Simple username-based login
-- Clean chat interface
-- Message history during session
-- Simulated response streaming
+## Características
 
-## Setup
+- Sistema de login basado en nombre de usuario
+- Interfaz de chat limpia y moderna
+- Historial de mensajes durante la sesión
+- Simulación de streaming de respuestas
+- Gestión de documentos y creación de vector stores
+- Integración con modelos de OpenAI
 
-1. Clone the repository
-2. Install dependencies:
+## Diagrama de Flujo
+
+```mermaid
+graph TD
+    A[Inicio] --> B[Login]
+    B --> C{Usuario Autenticado?}
+    C -->|No| B
+    C -->|Sí| D[Página Principal]
+    D --> E[Selección de Página]
+    E --> F[Subir Documentos]
+    E --> G[Chat]
+    F --> H[Crear Vector Store]
+    H --> I[Procesar Documentos]
+    I --> J[Guardar Vector Store]
+    G --> K[Consultar Vector Store]
+    K --> L[Generar Respuesta]
+    L --> M[Mostrar Respuesta]
+```
+
+## Configuración
+
+1. Clonar el repositorio
+2. Instalar dependencias:
    ```bash
    pip install -r requirements.txt
    ```
-3. Copy `.env.example` to `.env` and add your OpenAI API key:
+3. Copiar `.env.example` a `.env` y agregar tu API key de OpenAI:
    ```bash
    cp .env.example .env
    ```
-4. Edit `.env` and set your `OPENAI_API_KEY`
+4. Editar `.env` y configurar tu `OPENAI_API_KEY`
 
-## Running the Application
+## Ejecutar la Aplicación
 
 ```bash
 streamlit run main.py
 ```
 
-## Project Structure
+## Estructura del Proyecto
 
 ```
 .
-├── main.py              # Main application file
-├── requirements.txt     # Project dependencies
-├── .env                # Environment variables (create from .env.example)
+├── main.py              # Archivo principal de la aplicación
+├── requirements.txt     # Dependencias del proyecto
+├── .env                # Variables de entorno (crear desde .env.example)
 └── src/
-    └── utils/
-        └── config.py   # Configuration settings
+    ├── ui/             # Componentes de interfaz de usuario
+    │   ├── pages/      # Páginas de la aplicación
+    │   └── components/ # Componentes reutilizables
+    └── utils/          # Utilidades y configuración
 ```
 
-## Usage
+## Instrucciones de Uso
 
-1. Enter your username to start
-2. Type your message in the chat input
-3. Chat history is maintained during your session
+### 1. Inicio de Sesión
+- Ingresa tu nombre de usuario en la pantalla de login
+- No se requiere contraseña para esta versión demo
 
-## Requirements
+### 2. Gestión de Documentos
+- Navega a la pestaña "Upload" en el menú lateral
+- Sube documentos en formatos soportados (.txt, .pdf, .doc, .docx)
+- Configura los parámetros del vector store:
+  - Modelo de embedding
+  - Tamaño de chunks
+  - Solapamiento entre chunks
+  - Nombre y descripción del vector store
+- Crea el vector store con los documentos subidos
+
+### 3. Chat con Documentos
+- Navega a la pestaña "Chat" en el menú lateral
+- Escribe tus preguntas sobre los documentos
+- El asistente buscará información relevante en los vector stores
+- Las respuestas se generarán basadas en el contexto encontrado
+
+### 4. Gestión de Vector Stores
+- Puedes crear múltiples vector stores
+- Cada vector store puede contener diferentes conjuntos de documentos
+- Los vector stores se pueden cargar, eliminar o crear nuevos según necesidad
+
+## Requisitos
 
 - Python 3.8+
 - Streamlit
-- OpenAI Python client
+- Cliente Python de OpenAI
 - python-dotenv 

@@ -1,20 +1,20 @@
 # Core dependencies
-streamlit==1.32.0
-python-dotenv==1.0.1
-openai==1.12.0
+streamlit
+python-dotenv
+openai
 
-# Vector store and embeddings
-langchain==0.1.9
-langchain-community==0.0.24
-langchain-openai==0.0.5
-faiss-cpu==1.7.4
+
+langchain
+langchain-community
+langchain-openai
+faiss-cpu
 
 # Document loaders
-unstructured==0.12.2
-pypdf==3.17.4
-python-docx==1.1.0
-python-pptx==0.6.23
+unstructured
+pypdf
+python-docx
+python-pptx
 
 # Type hints and utilities
-typing-extensions==4.9.0
-pydantic==2.6.1 
+typing-extensions
+pydantic
