@@ -9,7 +9,8 @@ from typing import Literal, Optional
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 
-from src.utils.prompts import AGENT_PROMPT
+from src.utils.prompts import (AGENT_PROMPT,
+                               CONTEXTUALIZE_QUESTION_SYSTEM_PROMPT)
 from src.utils.config import OPENAI_API_KEY
 
 logger = logging.getLogger(__name__)
@@ -129,14 +130,12 @@ class AgentAI:
             str: Reformulated question
         """
         try:
-            system_prompt = """Given a chat history and the latest user question which might 
-            reference context in the chat history, formulate a standalone question which can 
-            be understood without the chat history. Do NOT answer the question, just reformulate 
-            it if needed and otherwise return it as is."""
-
+            
             messages = [{
                 "role": "system",
-                "content": f"{system_prompt}\n\nChat history:\n{chat_history[:-1]}\n\nLatest question: {chat_history[-1]['content']}"
+                "content": f"""{CONTEXTUALIZE_QUESTION_SYSTEM_PROMPT}\n
+                Chat history:\n{chat_history[:-1]}\n
+                Latest question: {chat_history[-1]['content']}"""
             }]
 
             response = openai.chat.completions.create(
@@ -157,9 +156,8 @@ class AgentAI:
         """
         try:
             question = self.contextualize_question(chat_history, self.model)
-            # Initialize message history with system prompt and user question
-            
-            self.agent_messages.extend(chat_history)
+                        
+            self.agent_messages.extend(chat_history[1:])
             
             for turn in range(max_turns):
                 # Get agent's response

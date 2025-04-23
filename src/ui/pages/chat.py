@@ -106,17 +106,16 @@ class ChatPage:
             st.session_state.messages.append({"role": "assistant", "content": full_response}) 
 
         if "agent_messages" in st.session_state:
-            options=[i+1 for i in range(len(st.session_state["agent_messages"]))]
+            options=[i+1 for i in range(len(st.session_state.agent_messages))]
+            index=len(options)-1
             question_selected =st.sidebar.selectbox(
                 "Agent thinking steps",
                 options=options,
-                index=len(options)-1,
-                key="agent_messages_selectbox"
+                index=index
             )
-            # for i, question in enumerate(st.session_state["agent_messages"]):
-            #     st.sidebar.write(f"question {i+1}:")
+
             if question_selected:
-                for message in st.session_state["agent_messages"][question_selected-1][2 * question_selected + 1:]:
+                for message in st.session_state["agent_messages"][question_selected-1][2 * question_selected:]:
                     st.sidebar.write(message['content'])
-            #st.sidebar.write(st.session_state["agent_messages"][2:])
+
     
