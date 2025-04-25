@@ -11,14 +11,6 @@ st.set_page_config(
 )
 
 # Initialize session state
-# if "messages" not in st.session_state:
-#     st.session_state.messages = []
-# if "model" not in st.session_state:
-#     st.session_state.model = UI_CONFIG["available_models"][0]
-# if "authenticated" not in st.session_state:
-#     st.session_state.authenticated = False
-# if "user" not in st.session_state:
-#     st.session_state.user = None
 if "uploaded_files" not in st.session_state:
     st.session_state.uploaded_files = []
 if "vector_store_params" not in st.session_state:

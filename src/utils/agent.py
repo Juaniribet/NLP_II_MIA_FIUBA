@@ -10,16 +10,11 @@ from pydantic import ValidationError
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 
-from src.utils.prompts import (AGENT_PROMPT,
-                               CONTEXTUALIZE_QUESTION_SYSTEM_PROMPT)
+from src.utils.prompts import AGENT_PROMPT
 from src.utils.config import OPENAI_API_KEY
 from src.utils.models import AgentOutput
 
 logger = logging.getLogger(__name__)
-
-# class AgentOutput(BaseModel):
-#     type: Literal["thought", "action", "answer"]
-#     content: str
 
 class AgentAI:
     def __init__(self):

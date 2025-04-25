@@ -17,10 +17,6 @@ class ChatPage:
         """Initialize session state variables."""
         if "model" not in st.session_state:
             st.session_state.model = self.available_models[0]
-        # if "temperature" not in st.session_state:
-        #     st.session_state.temperature = 0.7
-        # if "vector_store_name" not in st.session_state:
-        #     st.session_state.vector_store_name = "default"
         if "messages" not in st.session_state:
             st.session_state.messages = [{
                 "role": "assistant",
