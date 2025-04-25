@@ -99,13 +99,8 @@ class ChatPage:
             # Generate and stream response
             with st.chat_message("assistant"):
                 
-                # full_response = ""
-                
                 # Stream the response
                 full_response = st.write_stream(self._generate_response(st.session_state.messages))
-
-                
-                # message_placeholder.markdown(full_response)
             
             # Add assistant response to chat history
             st.session_state.messages.append({"role": "assistant", "content": full_response}) 
