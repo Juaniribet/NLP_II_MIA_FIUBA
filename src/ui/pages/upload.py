@@ -1,5 +1,7 @@
 import streamlit as st
 import os
+import re
+import unicodedata
 from typing import Optional, List, Dict
 from src.auth.auth_handler import is_authenticated
 from src.utils.vector_store_creator import VectorStoreCreator
@@ -29,7 +31,39 @@ class UploadPage:
             return False
         file_ext = os.path.splitext(file.name)[1].lower()
         return file_ext in self.allowed_extensions
+    
+    def _sanitize_name(self, name: str) -> str:
+        """
+        Sanitizes a filename to make it safe for use on most filesystems.
+        
+        - Converts accented characters to their ASCII equivalents.
+        - Removes invalid characters.
+        - Replaces spaces and special characters with underscores.
+        - Collapses multiple underscores into one.
+        - Trims leading/trailing underscores and periods.
+        
+        Args:
+            name (str): The original filename.
 
+        Returns:
+            str: A sanitized version of the filename.
+        """
+        if not isinstance(name, str):
+            raise TypeError("Filename must be a string.")
+
+        try:
+            name = unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode('ascii')
+        except Exception:
+            pass  # If normalization fails, keep the original
+
+        name = name.strip()
+        name = name.replace(" ", "_")
+        name = re.sub(r'[^a-zA-Z0-9_.-]+', '_', name)
+        name = re.sub(r'_+', '_', name)
+        name = name.strip('._')
+
+        return name
+    
     def _save_uploaded_file(self, uploaded_file) -> Optional[str]:
         """Save the uploaded file and return its path."""
         if uploaded_file is None:
@@ -79,17 +113,19 @@ class UploadPage:
             )
         
         # Vector store name (required)
-        st.session_state.vector_store_params["store_name"] = st.sidebar.text_input(
+        st.session_state.vector_store_params["store_name"] =self._sanitize_name(
+            st.sidebar.text_input(
             "Vector Store Name *",
             value=st.session_state["vector_store_name"],
             help="Name for the vector store. This will be used to save and load the store.",
             placeholder=st.session_state["vector_store_name"]
         )
+        )
 
         # Vector store description (required)
         st.session_state.vector_store_params["store_description"] = st.sidebar.text_input(
             "Vector Store Description *",
-            value=st.session_state["vector_store_description"],
+            value=st.session_state["vector_store_description"]['description'],
             help="Description for the vector store. This will be used to save and load the store.",
             placeholder=st.session_state["vector_store_description"]
         )

@@ -37,6 +37,8 @@ class VectorStoreCreator:
         if not os.path.exists(self.temp_dir):
             os.makedirs(self.temp_dir)
 
+    
+
     def save_vector_store(self, name: str = "default", vectorstore: FAISS = None):
         """Save the current vector store to disk."""
         if self.db is None:
