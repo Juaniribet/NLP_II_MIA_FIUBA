@@ -6,29 +6,31 @@ from typing import List, Dict, Optional
 
 from pydantic import BaseModel
 from typing import Literal, Optional
+from pydantic import ValidationError
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 
 from src.utils.prompts import (AGENT_PROMPT,
                                CONTEXTUALIZE_QUESTION_SYSTEM_PROMPT)
 from src.utils.config import OPENAI_API_KEY
+from src.utils.models import AgentOutput
 
 logger = logging.getLogger(__name__)
 
-class AgentOutput(BaseModel):
-    type: Literal["thought", "action", "answer"]
-    content: str
+# class AgentOutput(BaseModel):
+#     type: Literal["thought", "action", "answer"]
+#     content: str
 
 class AgentAI:
     def __init__(self):
         openai.api_key = OPENAI_API_KEY
         self.max_retries = 3
         self.retry_delay = 1
-        self.prompt = self._build_prompt()
-        self.agent_messages = [{"role": "system", "content": self.prompt}]
         self.known_actions = {
             "get_context_from_vector_store": self.get_context_from_vector_store
         }
+        self.prompt = self._build_prompt()
+        self.agent_messages = [{"role": "system", "content": self.prompt}]
         self.client = openai.OpenAI()
         self.embeddings = OpenAIEmbeddings()
         self.temp_dir = "temp_vector_store"
@@ -62,7 +64,8 @@ class AgentAI:
             logger.error(f"Error building prompt: {e}")
             raise
 
-        return AGENT_PROMPT.format(vector_stores=vector_stores)
+        return AGENT_PROMPT.format(vector_stores=vector_stores, 
+                                   known_actions=self.known_actions.keys())
         
     def get_response(self, messages: List[Dict], model) -> str:
         """
@@ -76,9 +79,7 @@ class AgentAI:
         Returns:
             str: The generated response
         """
-        # for attempt in range(self.max_retries):
         try:
-            # print(model)
             response = self.client.beta.chat.completions.parse(
                 model=model,
                 messages=messages,
@@ -125,124 +126,118 @@ class AgentAI:
         except Exception as e:
             logger.error(f"Error getting context from vector store: {e}")
             return ""
-
-    def contextualize_question(self, chat_history: List[Dict]) -> str:
-        """
-        Reformulate the user's question to be standalone.
-        
-        Args:
-            chat_history: List of message dictionaries
-            model: The model to use for reformulation
-            
-        Returns:
-            str: Reformulated question
-        """
-        try:
-            
-            messages = [{
-                "role": "system",
-                "content": f"""{CONTEXTUALIZE_QUESTION_SYSTEM_PROMPT}\n
-                Chat history:\n{chat_history[:-1]}\n
-                Latest question: {chat_history[-1]['content']}"""
-            }]
-
-            response = openai.chat.completions.create(
-                    model="gpt-4o-mini-2024-07-18",
-                    messages=messages
-                )
-
-            return response.choices[0].message.content
-        except Exception as e:
-            logger.error(f"Error contextualizing question: {e}")
-            return chat_history[-1]["content"]
-
+    
     def run(self, chat_history, model, max_turns: int = 15) -> Optional[str]:
         """
         Run the agent with the given question.
         """
         try:
-            question = self.contextualize_question(chat_history)
                         
             self.agent_messages.extend(chat_history[1:])
-            
+
+            if model.startswith("o"):
+                self.token_count["agent_interaction"]["reasoning_tokens"] = 0
+
             for turn in range(max_turns):
                 # Get agent's response
-                response = self.get_response(self.agent_messages, model)
+                try:
+                    response = self.get_response(self.agent_messages, model)
 
-                result = response.choices[0].message.parsed
-                
-                if not result:
-                    logger.error("Invalid agent output format")
-                    return None
-
-                logger.info(f"Turn {turn+1}: {result.type.upper()} - {result.content}")
-
-                if turn == 0:
-                    self.token_count["user_interaction"]["prompt_tokens"] = response.usage.prompt_tokens
-
-                if (turn == 0) and (result.type == "answer"):
-                    self.token_count["user_interaction"]["completion_tokens"] = response.usage.completion_tokens
-
-                if (turn == 0) and (result.type != "answer"):
-                    self.token_count["agent_interaction"]["completion_tokens"] = response.usage.completion_tokens
-
-                if (turn > 0) and (result.type != "answer"):
-                    self.token_count["agent_interaction"]["prompt_tokens"] += response.usage.prompt_tokens
-                    self.token_count["agent_interaction"]["completion_tokens"] += response.usage.completion_tokens
-
-                if (turn > 0) and (result.type == "answer"):
-                    self.token_count["agent_interaction"]["prompt_tokens"] += response.usage.prompt_tokens
-                    self.token_count["user_interaction"]["completion_tokens"] += response.usage.completion_tokens
-                
-                self.token_count["user_interaction"]["total_tokens"] = self.token_count["user_interaction"]["prompt_tokens"] + self.token_count["user_interaction"]["completion_tokens"]
-                self.token_count["agent_interaction"]["total_tokens"] = self.token_count["agent_interaction"]["prompt_tokens"] + self.token_count["user_interaction"]["completion_tokens"]
-
-                # Add the agent's response to message history
-                agent_message = {"role": "assistant", "content": json.dumps({
-                    "type": result.type,
-                    "content": result.content
-                })}
-                self.agent_messages.append(agent_message)
-                
-                if result.type == "answer":
+                    result = response.choices[0].message.parsed
                     
-                    return result.content
+                    if not result:
+                        logger.error("Invalid agent output format")
+                        return None
+
+                    logger.info(f"Turn {turn+1}: {result.type.upper()} - {result.content}")
+
+                    if turn == 0:
+                        self.token_count["user_interaction"]["prompt_tokens"] = response.usage.prompt_tokens
+
+                    if (turn == 0) and (result.type == "answer"):
+                        self.token_count["user_interaction"]["completion_tokens"] = response.usage.completion_tokens
+
+                    if (turn == 0) and (result.type != "answer"):
+                        self.token_count["agent_interaction"]["completion_tokens"] = response.usage.completion_tokens
+
+                    if (turn > 0) and (result.type != "answer"):
+                        self.token_count["agent_interaction"]["prompt_tokens"] += response.usage.prompt_tokens
+                        self.token_count["agent_interaction"]["completion_tokens"] += response.usage.completion_tokens
+
+                    if (turn > 0) and (result.type == "answer"):
+                        self.token_count["agent_interaction"]["prompt_tokens"] += response.usage.prompt_tokens
+                        self.token_count["user_interaction"]["completion_tokens"] += response.usage.completion_tokens
                     
-                elif result.type == "action":
-                    # Parse action and parameter
-                    if ":" not in result.content:
-                        error_msg = f"Invalid action format: {result.content}"
-                        logger.error(error_msg)
-                        # Add error as user message and continue
-                        self.agent_messages.append({"role": "assistant", 
-                                                    "content": f"Error: {error_msg}. Please use the format 'get_context_from_vector_store: <vector_store_name>'"})
-                        continue
+                    if model.startswith("o"):
+                        self.token_count["agent_interaction"]["reasoning_tokens"] += response.usage.completion_tokens_details.reasoning_tokens
+
+                    
+                    self.token_count["user_interaction"]["total_tokens"] = self.token_count["user_interaction"]["prompt_tokens"] + self.token_count["user_interaction"]["completion_tokens"]
+                    self.token_count["agent_interaction"]["total_tokens"] = self.token_count["agent_interaction"]["prompt_tokens"] + self.token_count["user_interaction"]["completion_tokens"]
+
+    
+                    if result.type == "answer":
+                        agent_message = {"role": "assistant", "content": json.dumps({
+                                                                                    "type": result.type,
+                                                                                    "content": result.content
+                                                                                })}
+                        self.agent_messages.append(agent_message)
                         
-                    action_name, action_param = result.content.split(":", 1)
-                    action_name = action_name.strip()
-                    action_param = action_param.strip()
-                    
-                    if action_name not in self.known_actions:
-                        error_msg = f"Unknown action: {action_name}"
-                        logger.error(error_msg)
-                        # Add error as user message and continue
+                        return result.content
+                        
+                    elif result.type == "action":                    
+
+                        action_name, action_param = result.function_name, result.parameters
+
+                        question = action_param.question
+                        vector_store_name = action_param.vector_store_name
+
+                        agent_message = {"role": "assistant", "content": json.dumps({
+                                                                                    "type": result.type,
+                                                                                    "function_name": action_name,
+                                                                                    "parameters": {
+                                                                                        "question": question,
+                                                                                        "vector_store_name": vector_store_name
+                                                                                    }
+
+                                                                                })}
+                        self.agent_messages.append(agent_message)
+                        
+                        if action_name not in self.known_actions:
+                            error_msg = f"Unknown action: {action_name}"
+                            logger.error(error_msg)
+                            # Add error as user message and continue
+                            self.agent_messages.append({"role": "assistant", 
+                                                        "content": f"Error: {error_msg}. Available actions are: {list(self.known_actions.keys())}"})
+                            continue
+                        
+                        # Execute action and get observation
+                        observation = self.known_actions[action_name](vector_store_name, question)
+                        # Add observation to message history
                         self.agent_messages.append({"role": "assistant", 
-                                                    "content": f"Error: {error_msg}. Available actions are: {list(self.known_actions.keys())}"})
-                        continue
+                                                    "content": f"Observation: {observation}"})
+                        logger.info(f"Observation: {observation[:100]}...")
+                        
+                    elif result.type == "thought":
+                        agent_message = {"role": "assistant", "content": json.dumps({
+                                                                                        "type": result.type,
+                                                                                        "content": result.content
+                                                                                    })}
+                        self.agent_messages.append(agent_message)
+                        pass
                     
-                    # Execute action and get observation
-                    observation = self.known_actions[action_name](action_param, question)
-                    # Add observation to message history
-                    self.agent_messages.append({"role": "assistant", 
-                                                "content": f"Observation: {observation}"})
-                    logger.info(f"Observation: {observation[:100]}...")
+                    else:
+                        logger.error(f"Unknown result type: {result.type}")
+                        return None
                     
-                elif result.type == "thought":
-                    pass
-                
-                else:
-                    logger.error(f"Unknown result type: {result.type}")
-                    return None
+                except ValidationError as e:
+                    
+                    self.agent_messages.append({
+                        "role": "user",
+                        "content": f"""Your last response did not validate against the expected JSON schema.
+            Please correct the JSON output to match the {AgentOutput.__name__} model structure precisely.
+            ValidationError: {e}"""})
+                    continue
                     
             logger.warning(f"Maximum number of turns ({max_turns}) reached without a final answer")
             return "I wasn't able to find a definitive answer within the allowed reasoning steps."

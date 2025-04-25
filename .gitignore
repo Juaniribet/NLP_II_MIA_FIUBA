@@ -6,3 +6,5 @@ uploads/
 **/__pycache__/
 .env
 __pycache__/
+__pycache__
+uploads/

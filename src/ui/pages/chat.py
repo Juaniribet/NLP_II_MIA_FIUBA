@@ -17,10 +17,10 @@ class ChatPage:
         """Initialize session state variables."""
         if "model" not in st.session_state:
             st.session_state.model = self.available_models[0]
-        if "temperature" not in st.session_state:
-            st.session_state.temperature = 0.7
-        if "vector_store_name" not in st.session_state:
-            st.session_state.vector_store_name = "default"
+        # if "temperature" not in st.session_state:
+        #     st.session_state.temperature = 0.7
+        # if "vector_store_name" not in st.session_state:
+        #     st.session_state.vector_store_name = "default"
         if "messages" not in st.session_state:
             st.session_state.messages = [{
                 "role": "assistant",
@@ -129,6 +129,11 @@ class ChatPage:
             st.sidebar.write(f"Thinking prompt tokens: {total_agent_prompt_tokens}")
             st.sidebar.write(f"Thinking completion tokens: {total_agent_completion_tokens}")
             st.sidebar.write(f"Thinking total tokens: {total_agent_total_tokens}")
+
+            if st.session_state.model.startswith("o"):
+                total_agent_reasoning_tokens = sum(item["agent_interaction"]["reasoning_tokens"]for item in st.session_state["token_count"])
+                st.sidebar.write(f"Reasoning tokens: {total_agent_reasoning_tokens}")
+
                 
 
         if st.session_state.agent_messages:
@@ -142,6 +147,6 @@ class ChatPage:
 
             if question_selected:
                 for message in st.session_state["agent_messages"][question_selected-1][2 * question_selected:]:
-                    st.sidebar.write(message['content'])
+                    st.sidebar.write(message)
 
     
