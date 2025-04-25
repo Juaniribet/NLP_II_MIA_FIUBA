@@ -97,7 +97,7 @@ class UploadPage:
             st.session_state.vector_store_params["chunk_size"] = st.number_input(
                 "Chunk Size (chars)",
                 min_value=100,
-                max_value=2000,
+                max_value=5000,
                 value=st.session_state.vector_store_params["chunk_size"],
                 step=100,
                 help="Number of characters in each text chunk. Larger chunks capture more context but may be less precise."
@@ -108,7 +108,7 @@ class UploadPage:
                 min_value=0,
                 max_value=500,
                 value=st.session_state.vector_store_params["chunk_overlap"],
-                step=50,
+                step=10,
                 help="Number of characters that overlap between consecutive chunks. Helps maintain context between chunks."
             )
         
@@ -123,9 +123,13 @@ class UploadPage:
         )
 
         # Vector store description (required)
+        try:
+            value = st.session_state["vector_store_description"]['description']
+        except:
+            value = st.session_state["vector_store_description"]
         st.session_state.vector_store_params["store_description"] = st.sidebar.text_input(
             "Vector Store Description *",
-            value=st.session_state["vector_store_description"]['description'],
+            value=value,
             help="Description for the vector store. This will be used to save and load the store.",
             placeholder=st.session_state["vector_store_description"]
         )

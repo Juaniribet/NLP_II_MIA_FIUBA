@@ -16,8 +16,8 @@ if "uploaded_files" not in st.session_state:
 if "vector_store_params" not in st.session_state:
     st.session_state.vector_store_params = {
         "embedding_model": "text-embedding-3-small",
-        "chunk_size": 1000,
-        "chunk_overlap": 50,
+        "chunk_size": 500,
+        "chunk_overlap": 30,
         "separators": ["\n\n", "\n", " ", ""]
     }
 
