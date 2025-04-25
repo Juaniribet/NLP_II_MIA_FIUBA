@@ -2,8 +2,10 @@
 .venv
 .env
 temp_vector_store/
+uploads
 uploads/
 **/__pycache__/
+**/__pycache__
 .env
 __pycache__/
 __pycache__
